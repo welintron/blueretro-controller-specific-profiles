@@ -64,6 +64,38 @@ This prevents old profiles from returning after a reset.
 
 The normal firmware remains installed. The original full factory-reset/OTA behavior remains separate.
 
+## Public WebConfig
+
+The WebConfig interface for this firmware fork is available at:
+
+**https://welintron.github.io/webconfig/**
+
+Use **WebConfig v1.0.0** together with **BlueRetro Controller-Specific Profiles firmware v1.0.0**.
+
+The WebConfig provides the interface for selecting, reading, modifying and committing persistent controller-specific mappings.
+
+## Release
+
+**Firmware version: v1.0.0**
+
+This is the first public release of the controller-specific profiles fork.
+
+The release includes the controller-specific profile functionality and the corresponding WebConfig integration.
+
+### Tested targets
+
+The v1.0.0 firmware build configuration has been validated for:
+
+* 3DO
+* Nintendo 64
+* Neo Geo
+* PlayStation
+* Sega Saturn
+
+For installation, use the firmware binary corresponding to the hardware and system target of your BlueRetro adapter.
+
+For the complete source code and build instructions, see this repository.
+
 ### WebConfig GATT interface
 
 The firmware exposes profile operations used by the WebConfig:
