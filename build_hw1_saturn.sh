@@ -3,8 +3,8 @@ set -euo pipefail
 
 IMAGE="ghcr.io/darthcloud/idf-blueretro:v5.5.0_2024-12-02"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONTAINER="blueretro-build-hw1-saturn-v38-$$"
-OUT="$PROJECT_DIR/artifacts/saturn/BlueRetro_hw1_saturn_v38_configreset.bin"
+CONTAINER="blueretro-build-hw1-saturn$$"
+OUT="$PROJECT_DIR/artifacts/saturn/BlueRetro_hw1_saturn.bin"
 
 cleanup() {
     docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
@@ -16,13 +16,8 @@ docker version >/dev/null
 
 echo "[2/7] Pulling ESP-IDF image..."
 docker pull "$IMAGE"
-
 echo "[3/7] Creating build container..."
-docker create \
-    --entrypoint /bin/bash \
-    --name "$CONTAINER" \
-    "$IMAGE" \
-    -lc "sleep infinity" >/dev/null
+docker create     --entrypoint /bin/bash     --name "$CONTAINER"     "$IMAGE"     -lc "sleep infinity" >/dev/null
 
 docker start "$CONTAINER" >/dev/null
 
@@ -36,21 +31,16 @@ cd /work
 
 rm -rf build
 rm -rf components/queue_bss/liblfds
-
-git clone --depth 1 \
-    https://github.com/darthcloud/liblfds7.1.1.git \
-    components/queue_bss/liblfds
+git clone --depth 1     https://github.com/darthcloud/liblfds7.1.1.git     components/queue_bss/liblfds
 
 git config --global --add safe.directory /opt/esp/idf
 git config --global --add safe.directory /opt/esp/idf/components/openthread/openthread
 
 cp configs/hw1/saturn sdkconfig
 
-find /work -path /work/build -prune -o -type f -exec touch {} +
-
+find /work \( -path /work/.git -o -path /work/build -o -path /work/artifacts \) -prune -o -type f -exec touch {} +
 . "$IDF_PATH/export.sh"
 '
-
 echo "[6/7] Building HW1 / Sega Saturn..."
 docker exec "$CONTAINER" /bin/bash -lc '
 set -euo pipefail
@@ -64,22 +54,13 @@ idf.py build
 echo "[7/7] Copying firmware artifacts..."
 mkdir -p "$PROJECT_DIR/artifacts/saturn"
 
-docker cp \
-    "$CONTAINER:/work/build/BlueRetro_hw1_saturn.bin" \
-    "$OUT"
+docker cp     "$CONTAINER:/work/build/BlueRetro_hw1_saturn.bin"     "$OUT"
 
-docker cp \
-    "$CONTAINER:/work/build/bootloader/bootloader.bin" \
-    "$PROJECT_DIR/artifacts/saturn/bootloader.bin"
+docker cp     "$CONTAINER:/work/build/bootloader/bootloader.bin"     "$PROJECT_DIR/artifacts/saturn/bootloader.bin"
 
-docker cp \
-    "$CONTAINER:/work/build/partition_table/partition-table.bin" \
-    "$PROJECT_DIR/artifacts/saturn/partition-table.bin"
+docker cp     "$CONTAINER:/work/build/partition_table/partition-table.bin"     "$PROJECT_DIR/artifacts/saturn/partition-table.bin"
 
-docker cp \
-    "$CONTAINER:/work/build/ota_data_initial.bin" \
-    "$PROJECT_DIR/artifacts/saturn/ota_data_initial.bin"
-
+docker cp     "$CONTAINER:/work/build/ota_data_initial.bin"     "$PROJECT_DIR/artifacts/saturn/ota_data_initial.bin"
 echo
 echo "=============================================="
 echo "BlueRetro HW1 / Sega Saturn V38 build completed"

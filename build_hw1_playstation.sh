@@ -2,8 +2,8 @@
 set -euo pipefail
 IMAGE="ghcr.io/darthcloud/idf-blueretro:v5.5.0_2024-12-02"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONTAINER="blueretro-build-playstation-v36-profilesavefix-$$"
-OUT="$PROJECT_DIR/artifacts/playstation/BlueRetro_hw1_playstation_v36_profilesavefix.bin"
+CONTAINER="blueretro-build-playstation$$"
+OUT="$PROJECT_DIR/artifacts/playstation/BlueRetro_hw1_playstation.bin"
 cleanup(){ docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT INT TERM
 mkdir -p "$PROJECT_DIR/artifacts/playstation"
@@ -21,7 +21,7 @@ git clone --depth 1 https://github.com/darthcloud/liblfds7.1.1.git components/qu
 git config --global --add safe.directory /opt/esp/idf
 git config --global --add safe.directory /opt/esp/idf/components/openthread/openthread
 cp configs/hw1/playstation sdkconfig
-find /work -path /work/build -prune -o -type f -exec touch {} +
+find /work \( -path /work/.git -o -path /work/build -o -path /work/artifacts \) -prune -o -type f -exec touch {} +
 . "$IDF_PATH/export.sh"
 export BR_HW=_hw1
 export BR_SYS=_playstation
