@@ -172,7 +172,19 @@ static void bt_att_hid_process_find_hid_hdls(struct bt_dev *device,
             }
         }
         struct bt_att_group_data *last_elem = (struct bt_att_group_data *)((uint8_t *)data + data_len * (elem_cnt - 1));
-        bt_att_cmd_read_group_req_uuid16(device->acl_handle, last_elem->end_handle, BT_UUID_GATT_PRIMARY);
+
+        /*
+         * Continue after the last service returned. Reusing end_handle
+         * repeats a single-service response forever (notably GAP's 0x1801
+         * service), preventing discovery of a later HID service.
+         */
+        if (last_elem->end_handle < 0xFFFF) {
+            bt_att_cmd_read_group_req_uuid16(device->acl_handle,
+                last_elem->end_handle + 1, BT_UUID_GATT_PRIMARY);
+        }
+        else {
+            bt_att_hid_start_next_state(device, hid_data);
+        }
     }
     else {
         bt_att_hid_start_next_state(device, hid_data);
