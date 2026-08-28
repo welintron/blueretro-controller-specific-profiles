@@ -238,6 +238,14 @@ static void ouya(struct raw_src_mapping *map) {
 
 static void mapping_quirks_apply_pnp(struct bt_data *bt_data) {
     switch (bt_data->base.vid) {
+    case 0x0E6F:
+        if (bt_data->base.pid == 0x024B) {
+            uint32_t tmp = bt_data->raw_src_mappings[PAD].btns_mask[PAD_MS];
+            bt_data->raw_src_mappings[PAD].btns_mask[PAD_MS] =
+                bt_data->raw_src_mappings[PAD].btns_mask[PAD_MM];
+            bt_data->raw_src_mappings[PAD].btns_mask[PAD_MM] = tmp;
+        }
+        break;
     }
 }
 
