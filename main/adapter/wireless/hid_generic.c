@@ -338,7 +338,7 @@ static void hid_mouse_to_generic(struct bt_data *bt_data, struct wireless_ctrl *
     }
 }
 
-static void hid_pad_init(struct hid_report_meta *meta, struct hid_report *report, struct raw_src_mapping *map) {
+static void hid_pad_init(struct hid_report_meta *meta, struct hid_report *report, struct raw_src_mapping *map, bool is_victrix) {
     bool btns_is_xinput = 0;
     uint32_t z_is_joy = 0;
     int8_t hid_cbtn_idx = -1;
@@ -603,8 +603,10 @@ static void hid_pad_init(struct hid_report_meta *meta, struct hid_report *report
                         break;
                     case 0xB2 /* Record */:
                         map->mask[0] |= BIT(PAD_MQ);
-                        map->btns_mask[PAD_MQ] =
-                            BIT(report->usages[uidx].bit_offset - btn_offset);
+                        if (!is_victrix) {
+                            map->btns_mask[PAD_MQ] =
+                                BIT(report->usages[uidx].bit_offset - btn_offset);
+                        }
                         break;
                     case 0x223 /* AC Home */:
                         map->mask[0] |= BIT(PAD_MT);
@@ -619,10 +621,12 @@ static void hid_pad_init(struct hid_report_meta *meta, struct hid_report *report
                 }
             }
         }
-        uint32_t bit_size =
-            report->usages[uidx - 1].bit_offset + report->usages[uidx - 1].bit_size - btn_offset;
-        if (bit_size > report->usages[btn_idx].bit_size) {
-            report->usages[btn_idx].bit_size = bit_size;
+        if (!is_victrix) {
+            uint32_t bit_size =
+                report->usages[uidx - 1].bit_offset + report->usages[uidx - 1].bit_size - btn_offset;
+            if (bit_size > report->usages[btn_idx].bit_size) {
+                report->usages[btn_idx].bit_size = bit_size;
+            }
         }
         if (btn_idx == hid_cbtn_idx) {
             meta->hid_btn_idx = btn_idx;
@@ -642,7 +646,8 @@ static void hid_pad_to_generic(struct bt_data *bt_data, struct wireless_ctrl *ct
 
     if (!atomic_test_bit(&bt_data->base.flags[PAD], BT_INIT)) {
         hid_parser_load_report(bt_data, bt_data->base.report_id);
-        hid_pad_init(meta, bt_data->reports[PAD], &bt_data->raw_src_mappings[PAD]);
+        bool is_victrix = bt_data->base.vid == 0x0E6F && bt_data->base.pid == 0x024B;
+        hid_pad_init(meta, bt_data->reports[PAD], &bt_data->raw_src_mappings[PAD], is_victrix);
         mapping_quirks_apply(bt_data);
         bt_mon_log(false, "%s: axes_cal: [", __FUNCTION__);
     }
@@ -665,6 +670,29 @@ static void hid_pad_to_generic(struct bt_data *bt_data, struct wireless_ctrl *ct
         for (uint32_t i = 0; i < ARRAY_SIZE(generic_btns_mask); i++) {
             if (buttons & bt_data->raw_src_mappings[PAD].btns_mask[i]) {
                 ctrl_data->btns[0].value |= generic_btns_mask[i];
+            }
+        }
+
+        /*
+         * Victrix Pro BFG Reloaded: Share is Consumer Usage 0x0CB2.
+         * Its report bit is outside the 32-bit main-button field, so
+         * it must not be represented as BIT(32). Read the bit directly.
+         */
+        if (bt_data->base.vid == 0x0E6F && bt_data->base.pid == 0x024B) {
+            struct hid_report *report = bt_data->reports[PAD];
+
+            for (uint32_t i = 0; i < report->usage_cnt; i++) {
+                if (report->usages[i].usage_page == 0x0C &&
+                    report->usages[i].usage == 0x0B2) {
+                    uint32_t offset = report->usages[i].bit_offset;
+                    uint32_t byte_offset = offset / 8;
+                    uint32_t bit_shift = offset % 8;
+
+                    if ((bt_data->base.input[byte_offset] >> bit_shift) & 0x01) {
+                        ctrl_data->btns[0].value |= generic_btns_mask[PAD_MQ];
+                    }
+                    break;
+                }
             }
         }
     }
