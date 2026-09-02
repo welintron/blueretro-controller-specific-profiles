@@ -285,7 +285,17 @@ void bt_l2cap_sig_hdlr(struct bt_dev *device, struct bt_hci_pkt *bt_hci_acl_pkt)
                 }
                 else {
                     atomic_set_bit(&device->flags, BT_DEV_HID_INTR_READY);
-                    bt_l2cap_cmd_sdp_conn_req(device);
+                    /* Flydigi Vader 5 Pro (SDP identity 0x045E:0x02E0):
+                     * the controller has already completed SDP/HID discovery before
+                     * HID initialization. Re-opening the SDP channel here is not
+                     * required and can trigger a disconnect on this device.
+                     */
+                    struct bt_data *bt_data = &bt_adapter.data[device->ids.id];
+                    bool is_vader5pro =
+                        bt_data->base.vid == 0x045E && bt_data->base.pid == 0x02E0;
+                    if (!is_vader5pro) {
+                        bt_l2cap_cmd_sdp_conn_req(device);
+                    }
                     bt_hid_init(device);
                 }
             }
@@ -329,7 +339,17 @@ void bt_l2cap_sig_hdlr(struct bt_dev *device, struct bt_hci_pkt *bt_hci_acl_pkt)
                 }
                 else {
                     atomic_set_bit(&device->flags, BT_DEV_HID_INTR_READY);
-                    bt_l2cap_cmd_sdp_conn_req(device);
+                    /* Flydigi Vader 5 Pro (SDP identity 0x045E:0x02E0):
+                     * the controller has already completed SDP/HID discovery before
+                     * HID initialization. Re-opening the SDP channel here is not
+                     * required and can trigger a disconnect on this device.
+                     */
+                    struct bt_data *bt_data = &bt_adapter.data[device->ids.id];
+                    bool is_vader5pro =
+                        bt_data->base.vid == 0x045E && bt_data->base.pid == 0x02E0;
+                    if (!is_vader5pro) {
+                        bt_l2cap_cmd_sdp_conn_req(device);
+                    }
                     bt_hid_init(device);
                 }
             }

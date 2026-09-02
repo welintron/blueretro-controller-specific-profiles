@@ -134,12 +134,14 @@ static struct bt_profile bt_profiles[BT_PROFILE_MAX];
 static bool bt_profiles_loaded = false;
 
 static bool bt_profile_addr_equal(const struct bt_profile *profile,
-                                  uint8_t addr_type,
                                   uint8_t system_id,
                                   const uint8_t *bdaddr)
 {
+    /* A profile is unique per controller and wired system.  Address type is
+     * deliberately not part of the key: the same physical controller must
+     * not receive a second profile merely because its Bluetooth address type
+     * is represented differently by the connection path. */
     return profile->valid &&
-           profile->addr_type == addr_type &&
            profile->system_id == system_id &&
            memcmp(profile->bdaddr, bdaddr, sizeof(profile->bdaddr)) == 0;
 }
@@ -159,6 +161,18 @@ static uint8_t bt_profile_source_id_from_name(const char *name)
      *   38 = Saturn
      *   40 = PSX / PS2
      */
+
+    /*
+     * Any controller whose identification contains "Xbox" must use the
+     * Xbox One S / X|S Source.
+     *
+     * This check intentionally uses a case-insensitive comparison so that
+     * Xbox/XBOX/xbox are treated identically. It also takes priority over
+     * the generic BT_PS classification below.
+     */
+    if (strcasestr(name, "xbox")) {
+        return 16; /* Xbox One S / X|S */
+    }
 
     /* Keep specific modern PlayStation devices distinct from PSX/PS2. */
     if (strstr(name, "DualSense") ||
@@ -231,6 +245,19 @@ static uint8_t bt_profile_source_id(struct bt_dev *device)
         }
     }
 
+    /*
+     * Any controller whose identification contains "Xbox" has priority over
+     * the generic Bluetooth device type. This guarantees that a controller
+     * reported as "Xbox Wireless Controller" receives the Xbox Source even
+     * if another part of the Bluetooth identification classified it as BT_PS.
+     */
+    if (device->name && device->name->name[0]) {
+        const char *name = device->name->name;
+        if (strcasestr(name, "xbox")) {
+            return 16; /* Xbox One S / X|S */
+        }
+    }
+
     if (device->ids.type == BT_PS) {
         return 4; /* PS4 / PS5 */
     }
@@ -255,17 +282,56 @@ static uint8_t bt_profile_source_id(struct bt_dev *device)
     return 0;
 }
 
-static int32_t bt_profile_find(uint8_t addr_type,
-                               uint8_t system_id,
-                               const uint8_t *bdaddr)
+static int32_t bt_profile_save(void);
+
+static int32_t bt_profile_find(uint8_t system_id, const uint8_t *bdaddr)
 {
     for (uint32_t i = 0; i < BT_PROFILE_MAX; i++) {
-        if (bt_profile_addr_equal(&bt_profiles[i], addr_type,
-                                      system_id, bdaddr)) {
+        if (bt_profile_addr_equal(&bt_profiles[i], system_id, bdaddr)) {
             return i;
         }
     }
     return -1;
+}
+
+/*
+ * Enforce the one-profile-per-(MAC, system) invariant after loading
+ * persistent data. Older versions also considered addr_type part of the
+ * identity, which can leave duplicate records for the same controller and
+ * system when the address type changes between connection paths. Keep the
+ * lowest profile index as the canonical record and invalidate only records
+ * with the same MAC and system.
+ */
+static bool bt_profile_dedupe_by_mac_system(void)
+{
+    bool changed = false;
+
+    for (uint32_t i = 0; i < BT_PROFILE_MAX; i++) {
+        if (!bt_profiles[i].valid) {
+            continue;
+        }
+
+        for (uint32_t j = i + 1; j < BT_PROFILE_MAX; j++) {
+            if (!bt_profiles[j].valid) {
+                continue;
+            }
+
+            if (bt_profiles[i].system_id == bt_profiles[j].system_id &&
+                memcmp(bt_profiles[i].bdaddr, bt_profiles[j].bdaddr,
+                       sizeof(bt_profiles[i].bdaddr)) == 0) {
+                printf("# BT_PROFILE_DEDUPE mac=%02X:%02X:%02X:%02X:%02X:%02X system=%u keep=%lu drop=%lu\n",
+                       bt_profiles[i].bdaddr[5], bt_profiles[i].bdaddr[4],
+                       bt_profiles[i].bdaddr[3], bt_profiles[i].bdaddr[2],
+                       bt_profiles[i].bdaddr[1], bt_profiles[i].bdaddr[0],
+                       (unsigned)bt_profiles[i].system_id,
+                       (unsigned long)i, (unsigned long)j);
+                bt_profiles[j].valid = 0;
+                changed = true;
+            }
+        }
+    }
+
+    return changed;
 }
 
 static int32_t bt_profile_alloc(void)
@@ -1093,6 +1159,11 @@ void config_bt_profile_init(void)
         }
     }
 
+    /* Normalize legacy/profile-table duplicates before exposing the table. */
+    if (bt_profile_dedupe_by_mac_system()) {
+        bt_profile_save();
+    }
+
     bt_profiles_loaded = true;
 
     for (uint32_t i = 0; i < BT_PROFILE_MAX; i++) {
@@ -1248,9 +1319,7 @@ int32_t config_bt_profile_ensure(uint8_t dev_id, uint8_t out_idx)
                __FUNCTION__, dev_id);
         return -1;
     }
-int32_t index = bt_profile_find(addr_type,
-                                    (uint8_t)wired_adapter.system_id,
-                                    bdaddr);
+int32_t index = bt_profile_find((uint8_t)wired_adapter.system_id, bdaddr);
     bool is_new = false;
 
     uint32_t table_before_v35 = bt_profile_v30_table_hash();
@@ -1543,9 +1612,7 @@ int32_t config_bt_profile_apply(uint8_t dev_id, uint8_t out_idx)
     bt_profile_apply_last.map_hash_before =
         bt_profile_apply_hash_cfg(&config.in_cfg[out_idx]);
 
-    int32_t index = bt_profile_find(addr_type,
-                                     (uint8_t)wired_adapter.system_id,
-                                     bdaddr);
+    int32_t index = bt_profile_find((uint8_t)wired_adapter.system_id, bdaddr);
 
     memset(&bt_profile_hash_last, 0, sizeof(bt_profile_hash_last));
     bt_profile_hash_last.valid = 1;
@@ -1667,9 +1734,7 @@ int32_t config_bt_profile_update_identity(uint8_t dev_id)
         return -1;
     }
 
-    int32_t index = bt_profile_find(addr_type,
-                                    (uint8_t)wired_adapter.system_id,
-                                    bdaddr);
+    int32_t index = bt_profile_find((uint8_t)wired_adapter.system_id, bdaddr);
     if (index < 0) {
         return 0;
     }
@@ -1925,9 +1990,7 @@ void config_bt_profile_sync(void)
             continue;
         }
 
-        int32_t index = bt_profile_find(addr_type,
-                                        (uint8_t)wired_adapter.system_id,
-                                        bdaddr);
+        int32_t index = bt_profile_find((uint8_t)wired_adapter.system_id, bdaddr);
 
         /*
          * Existing MAC-keyed mappings remain authoritative. This sync path
