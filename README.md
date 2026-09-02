@@ -67,35 +67,55 @@ The normal firmware remains installed. The original full factory-reset/OTA behav
 ## Public WebConfig
 
 The WebConfig interface for this firmware fork is available at:
+[BlueRetro Controller-Specific Profiles WebConfig](https://welintron.github.io/webconfig/)
 
-**https://welintron.github.io/webconfig/**
 
-Use **WebConfig v1.0.0** together with **BlueRetro Controller-Specific Profiles firmware v1.0.0**.
+Use the WebConfig together with the corresponding BlueRetro Controller-Specific Profiles firmware release.
 
 The WebConfig provides the interface for selecting, reading, modifying and committing persistent controller-specific mappings.
 
 ## Release
 
-**Firmware version: v1.0.0**
+**Firmware version: v1.1.0**
 
-This is the first public release of the controller-specific profiles fork.
+This release adds support for the **Victrix Pro BFG Reloaded Xbox controller**, including device-specific HID handling and button mapping corrections.
 
-The release includes the controller-specific profile functionality and the corresponding WebConfig integration.
+### Victrix Pro BFG Reloaded
+
+The Victrix Pro BFG Reloaded Xbox controller is identified by:
+
+- VID: `0x0E6F`
+- PID: `0x024B`
+
+The release includes:
+
+- HID service discovery support.
+- Device-specific button mapping.
+- Correct Menu and View button mapping.
+- Independent Share button handling.
+- Fix for the Share/A button mapping collision.
+
+The Victrix Pro BFG Reloaded has been physically tested with the Nintendo 64 and Sega Saturn targets.
 
 ### Tested targets
 
-The v1.0.0 firmware build configuration has been validated for:
+The v1.1.0 firmware has been validated for:
 
-* 3DO
-* Nintendo 64
-* Neo Geo
-* PlayStation
-* Sega Saturn
+- 3DO
+- Nintendo 64
+- Neo Geo
+- PlayStation
+- Sega Saturn
+
+### Tested controllers
+
+- 8BitDo S30
+- Sony DualSense
+- Victrix Pro BFG Reloaded Xbox
 
 For installation, use the firmware binary corresponding to the hardware and system target of your BlueRetro adapter.
 
 For the complete source code and build instructions, see this repository.
-
 ### WebConfig GATT interface
 
 The firmware exposes profile operations used by the WebConfig:
