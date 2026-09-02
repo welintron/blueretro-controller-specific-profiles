@@ -16,6 +16,7 @@ The firmware stores controller-specific mappings in ESP32 NVS.
 - Classic Bluetooth identity by Bluetooth address.
 - BLE identity by address type plus Bluetooth address.
 - Profiles scoped by wired console/system ID.
+- Profile identity is based on controller MAC address + system ID, preventing duplicate profiles within the same system while allowing separate profiles for different systems.
 - Existing controller profile mapping is authoritative.
 - A new controller is automatically registered when no matching profile exists.
 - Different controllers can share the same runtime slot without overwriting each other's stored mapping.
@@ -76,30 +77,28 @@ The WebConfig provides the interface for selecting, reading, modifying and commi
 
 ## Release
 
-**Firmware version: v1.1.0**
+**Firmware version: v1.2.0**
 
-This release adds support for the **Victrix Pro BFG Reloaded Xbox controller**, including device-specific HID handling and button mapping corrections.
+This release adds support for the **Flydigi Vader 5 Pro** and fixes duplicate controller profiles by using the controller MAC address + system ID as the profile identity.
 
-### Victrix Pro BFG Reloaded
+### Flydigi Vader 5 Pro
 
-The Victrix Pro BFG Reloaded Xbox controller is identified by:
+The Flydigi Vader 5 Pro is supported through the Bluetooth/HID handling added for the controller.
 
-- VID: `0x0E6F`
-- PID: `0x024B`
+Controllers identified as **Xbox Wireless Controller** are assigned to the **Xbox One S / X|S** source.
 
-The release includes:
+### Profile identity fix
 
-- HID service discovery support.
-- Device-specific button mapping.
-- Correct Menu and View button mapping.
-- Independent Share button handling.
-- Fix for the Share/A button mapping collision.
+Profile identity is now based on:
 
-The Victrix Pro BFG Reloaded has been physically tested with the Nintendo 64 and Sega Saturn targets.
+- Controller MAC address.
+- Wired console/system ID.
+
+This allows the same physical controller to have different profiles for different systems while preventing duplicate profiles within the same system.
 
 ### Tested targets
 
-The v1.1.0 firmware has been validated for:
+The v1.2.0 firmware has been validated for:
 
 - 3DO
 - Nintendo 64
@@ -112,6 +111,7 @@ The v1.1.0 firmware has been validated for:
 - 8BitDo S30
 - Sony DualSense
 - Victrix Pro BFG Reloaded Xbox
+- Flydigi Vader 5 Pro
 
 For installation, use the firmware binary corresponding to the hardware and system target of your BlueRetro adapter.
 
