@@ -21,6 +21,7 @@ The firmware stores controller-specific mappings in ESP32 NVS.
 - A new controller is automatically registered when no matching profile exists.
 - Different controllers can share the same runtime slot without overwriting each other's stored mapping.
 - GameID configuration remains authoritative.
+- Added support for Victrix Pro BFG Reloaded Xbox and Flydigi Vader 5 Pro controllers.
 
 ### Profile lifecycle
 
