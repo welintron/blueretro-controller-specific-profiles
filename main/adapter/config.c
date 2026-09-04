@@ -365,591 +365,6 @@ static int32_t bt_profile_get_addr(struct bt_dev *device,
 }
 
 
-/* V30 profile lifecycle trace */
-enum { V30_NVS_LOAD=1, V30_SAVE=2, V30_ENSURE=3, V30_APPLY=4,
-       V30_IDENTITY=5, V30_SYNC=6, V30_CLEAR=7, V30_WRITE=8,
-       V30_COMMIT=9, V30_CONFIG_INIT=10, V30_CONFIG_UPDATE=11 };
-struct bt_profile_v30_event {
-    uint32_t seq; uint8_t type; int8_t profile; uint8_t source; uint8_t out;
-    int32_t result; uint32_t before_hash; uint32_t after_hash;
-    uint32_t table_hash; uint32_t active_hash; uint32_t aux;
-} __packed;
-struct bt_profile_v30_snapshot {
-    int32_t open_err; int32_t get_err; uint32_t stored_size; uint32_t expected_size;
-    uint32_t loaded_blob_hash; uint32_t table_hash; uint32_t profile0_hash;
-    uint32_t runtime_hash; uint8_t source; uint8_t profile0_valid;
-    uint8_t profile0_map_size; uint8_t profile_count; uint32_t last_seq;
-} __packed;
-static struct bt_profile_v30_event bt_profile_v30_last;
-static struct bt_profile_v30_snapshot bt_profile_v30_snap;
-static uint32_t bt_profile_v30_seq;
-static uint32_t bt_profile_v30_cfg_hash(const struct in_cfg *cfg){
-    uint32_t h=2166136261u, n=cfg?cfg->map_size:0; if(n>ADAPTER_MAPPING_MAX)n=ADAPTER_MAPPING_MAX;
-    const uint8_t *p=cfg?(const uint8_t*)cfg->map_cfg:NULL;
-    for(uint32_t i=0;p&&i<n*sizeof(struct map_cfg);i++){h^=p[i];h*=16777619u;} return h;
-}
-static uint32_t bt_profile_v30_table_hash(void){
-    uint32_t h=2166136261u; const uint8_t *p=(const uint8_t*)bt_profiles;
-    for(uint32_t i=0;i<sizeof(bt_profiles);i++){h^=p[i];h*=16777619u;} return h;
-}
-static uint8_t bt_profile_v30_count(void){uint8_t n=0;for(uint32_t i=0;i<BT_PROFILE_MAX;i++)if(bt_profiles[i].valid)n++;return n;}
-static void bt_profile_v30_trace(uint8_t t,int8_t p,uint8_t out,int32_t r,uint32_t b,uint32_t af,uint32_t aux){
-    ++bt_profile_v30_seq; bt_profile_v30_last.seq=bt_profile_v30_seq; bt_profile_v30_last.type=t;
-    bt_profile_v30_last.profile=p; bt_profile_v30_last.source=(uint8_t)config_get_src(); bt_profile_v30_last.out=out;
-    bt_profile_v30_last.result=r; bt_profile_v30_last.before_hash=b; bt_profile_v30_last.after_hash=af;
-    bt_profile_v30_last.table_hash=bt_profile_v30_table_hash();
-    bt_profile_v30_last.active_hash=(out<WIRED_MAX_DEV)?bt_profile_v30_cfg_hash(&config.in_cfg[out]):0;
-    bt_profile_v30_last.aux=aux;
-}
-static void bt_profile_v30_snap_update(void){
-    bt_profile_v30_snap.table_hash=bt_profile_v30_table_hash();
-    bt_profile_v30_snap.profile0_valid=bt_profiles[0].valid?1:0;
-    bt_profile_v30_snap.profile0_map_size=bt_profiles[0].valid?bt_profiles[0].in_cfg.map_size:0;
-    bt_profile_v30_snap.profile0_hash=bt_profiles[0].valid?bt_profile_v30_cfg_hash(&bt_profiles[0].in_cfg):0;
-    bt_profile_v30_snap.runtime_hash=bt_profile_v30_cfg_hash(&config.in_cfg[0]);
-    bt_profile_v30_snap.source=(uint8_t)config_get_src(); bt_profile_v30_snap.profile_count=bt_profile_v30_count();
-    bt_profile_v30_snap.last_seq=bt_profile_v30_seq;
-}
-uint32_t config_bt_profile_v30_event_diag(uint8_t *d,uint32_t m){uint32_t n=sizeof(bt_profile_v30_last);if(!d||m<n)return 0;memcpy(d,&bt_profile_v30_last,n);return n;}
-uint32_t config_bt_profile_v30_snapshot_diag(uint8_t *d,uint32_t m){uint32_t n=sizeof(bt_profile_v30_snap);if(!d||m<n)return 0;bt_profile_v30_snap_update();memcpy(d,&bt_profile_v30_snap,n);return n;}
-
-
-struct bt_profile_v31_diag {
-    uint8_t kind;
-    uint8_t event_type;
-    int8_t profile_index;
-    uint8_t config_source;
-    uint32_t seq;
-    int32_t result;
-    uint32_t hash_before;
-    uint32_t hash_after;
-} __packed;
-
-static struct bt_profile_v31_diag bt_profile_v31_last;
-
-struct bt_profile_v31_state {
-    int32_t nvs_open_err;
-    int32_t nvs_get_err;
-    uint32_t stored_size;
-    uint32_t expected_size;
-    uint32_t loaded_hash;
-    uint32_t table_hash;
-    uint32_t profile0_hash;
-    uint32_t runtime_hash;
-    uint32_t seq;
-    uint8_t profile0_valid;
-    uint8_t profile0_map_size;
-    uint8_t profile_count;
-    uint8_t config_source;
-} __packed;
-
-static struct bt_profile_v31_state bt_profile_v31_state_last;
-
-static uint32_t bt_profile_v31_cfg_hash(const struct in_cfg *cfg)
-{
-    uint32_t hash = 2166136261u;
-    uint32_t map_size = cfg ? cfg->map_size : 0;
-    if (map_size > ADAPTER_MAPPING_MAX) {
-        map_size = ADAPTER_MAPPING_MAX;
-    }
-
-    const uint8_t *bytes = cfg ? (const uint8_t *)cfg->map_cfg : NULL;
-    for (uint32_t i = 0; bytes && i < map_size * sizeof(struct map_cfg); i++) {
-        hash ^= bytes[i];
-        hash *= 16777619u;
-    }
-    return hash;
-}
-
-static uint32_t bt_profile_v31_table_hash(void)
-{
-    uint32_t hash = 2166136261u;
-    const uint8_t *bytes = (const uint8_t *)bt_profiles;
-    for (uint32_t i = 0; i < sizeof(bt_profiles); i++) {
-        hash ^= bytes[i];
-        hash *= 16777619u;
-    }
-    return hash;
-}
-
-static uint8_t bt_profile_v31_count(void)
-{
-    uint8_t count = 0;
-    for (uint32_t i = 0; i < BT_PROFILE_MAX; i++) {
-        if (bt_profiles[i].valid) {
-            count++;
-        }
-    }
-    return count;
-}
-
-static void bt_profile_v31_state_update(void)
-{
-    bt_profile_v31_state_last.table_hash = bt_profile_v31_table_hash();
-    bt_profile_v31_state_last.profile0_valid = bt_profiles[0].valid ? 1 : 0;
-    bt_profile_v31_state_last.profile0_map_size =
-        bt_profiles[0].valid ? bt_profiles[0].in_cfg.map_size : 0;
-    bt_profile_v31_state_last.profile0_hash =
-        bt_profiles[0].valid ? bt_profile_v31_cfg_hash(&bt_profiles[0].in_cfg) : 0;
-    bt_profile_v31_state_last.runtime_hash =
-        bt_profile_v31_cfg_hash(&config.in_cfg[0]);
-    bt_profile_v31_state_last.seq = bt_profile_v31_state_last.seq;
-    bt_profile_v31_state_last.profile_count = bt_profile_v31_count();
-    bt_profile_v31_state_last.config_source = (uint8_t)config_get_src();
-}
-
-#define BT_PROFILE_V32_RING_CAPACITY 64
-
-struct bt_profile_v32_ring_event {
-    uint8_t kind;
-    uint8_t event_type;
-    int8_t profile_index;
-    uint8_t config_source;
-    uint32_t seq;
-    int32_t result;
-    uint32_t hash_before;
-    uint32_t hash_after;
-} __packed;
-
-static struct bt_profile_v32_ring_event bt_profile_v32_ring[BT_PROFILE_V32_RING_CAPACITY];
-static uint8_t bt_profile_v32_ring_head;
-static uint8_t bt_profile_v32_ring_count;
-
-static void bt_profile_v32_ring_push(uint8_t type, int8_t profile_index,
-                                     uint8_t config_source, uint32_t seq,
-                                     int32_t result, uint32_t before,
-                                     uint32_t after)
-{
-    struct bt_profile_v32_ring_event *event =
-        &bt_profile_v32_ring[bt_profile_v32_ring_head];
-
-    event->kind = 5;
-    event->event_type = type;
-    event->profile_index = profile_index;
-    event->config_source = config_source;
-    event->seq = seq;
-    event->result = result;
-    event->hash_before = before;
-    event->hash_after = after;
-
-    bt_profile_v32_ring_head =
-        (uint8_t)((bt_profile_v32_ring_head + 1U) %
-                  BT_PROFILE_V32_RING_CAPACITY);
-
-    if (bt_profile_v32_ring_count < BT_PROFILE_V32_RING_CAPACITY) {
-        bt_profile_v32_ring_count++;
-    }
-}
-
-static uint8_t bt_profile_v32_ring_physical_index(uint8_t logical_index)
-{
-    uint8_t oldest =
-        (uint8_t)((bt_profile_v32_ring_head +
-                   BT_PROFILE_V32_RING_CAPACITY -
-                   bt_profile_v32_ring_count) %
-                  BT_PROFILE_V32_RING_CAPACITY);
-
-    return (uint8_t)((oldest + logical_index) %
-                     BT_PROFILE_V32_RING_CAPACITY);
-}
-
-uint32_t config_bt_profile_v32_ring_meta(uint8_t *data, uint32_t max_len)
-{
-    uint8_t payload[20] = {0};
-    uint32_t next_seq = bt_profile_v31_state_last.seq + 1U;
-    uint32_t oldest_seq = 0;
-    uint32_t newest_seq = 0;
-
-    payload[0] = 4;
-    payload[1] = bt_profile_v32_ring_count;
-    payload[2] = BT_PROFILE_V32_RING_CAPACITY;
-    payload[3] = bt_profile_v32_ring_head;
-
-    memcpy(&payload[4], &next_seq, 4);
-
-    if (bt_profile_v32_ring_count > 0) {
-        uint8_t first = bt_profile_v32_ring_physical_index(0);
-        uint8_t last = bt_profile_v32_ring_physical_index(
-            (uint8_t)(bt_profile_v32_ring_count - 1U));
-        oldest_seq = bt_profile_v32_ring[first].seq;
-        newest_seq = bt_profile_v32_ring[last].seq;
-    }
-
-    memcpy(&payload[8], &oldest_seq, 4);
-    memcpy(&payload[12], &newest_seq, 4);
-
-    uint32_t profile0_hash =
-        bt_profiles[0].valid ?
-        bt_profile_v31_cfg_hash(&bt_profiles[0].in_cfg) : 0U;
-    memcpy(&payload[16], &profile0_hash, 4);
-
-    if (!data || max_len < sizeof(payload)) {
-        return 0;
-    }
-
-    memcpy(data, payload, sizeof(payload));
-    return sizeof(payload);
-}
-
-uint32_t config_bt_profile_v32_ring_event(uint8_t logical_index,
-                                          uint8_t *data, uint32_t max_len)
-{
-    uint8_t payload[20] = {0};
-
-    if (logical_index >= bt_profile_v32_ring_count) {
-        return 0;
-    }
-
-    uint8_t physical =
-        bt_profile_v32_ring_physical_index(logical_index);
-
-    memcpy(payload, &bt_profile_v32_ring[physical], sizeof(payload));
-
-    if (!data || max_len < sizeof(payload)) {
-        return 0;
-    }
-
-    memcpy(data, payload, sizeof(payload));
-    return sizeof(payload);
-}
-
-
-#define BT_PROFILE_V35_RING_CAPACITY 128
-
-struct bt_profile_v35_event {
-    uint8_t kind;
-    uint8_t type;
-    int8_t profile;
-    uint8_t source;
-    uint32_t seq;
-    int32_t result;
-    uint32_t profile_before;
-    uint32_t profile_after;
-    uint32_t table_before;
-    uint32_t table_after;
-    uint32_t runtime_before;
-    uint32_t runtime_after;
-} __packed;
-
-struct bt_profile_v35_identity {
-    uint8_t valid;
-    uint8_t addr_type;
-    uint16_t reserved;
-    uint32_t system_id;
-    uint32_t source_id;
-    uint32_t source_out_idx;
-    uint8_t bdaddr[6];
-    uint16_t reserved2;
-    uint32_t profile_index;
-    uint32_t profile_hash;
-} __packed;
-
-struct bt_profile_v35_find {
-    int32_t result;
-    struct bt_profile_v35_identity lookup;
-    struct bt_profile_v35_identity found;
-} __packed;
-
-struct bt_profile_v35_nvs {
-    int32_t open_err;
-    int32_t get_err;
-    uint32_t stored_size;
-    uint32_t expected_size;
-    uint32_t table_hash_after_load;
-    uint32_t profile0_hash_after_load;
-} __packed;
-
-static struct bt_profile_v35_event bt_profile_v35_ring[BT_PROFILE_V35_RING_CAPACITY];
-static uint8_t bt_profile_v35_ring_head;
-static uint8_t bt_profile_v35_ring_count;
-static struct bt_profile_v35_find bt_profile_v35_find_last;
-static struct bt_profile_v35_nvs bt_profile_v35_nvs_last;
-
-static uint32_t bt_profile_v35_profile_hash(int32_t index)
-{
-    if (index < 0 || index >= BT_PROFILE_MAX ||
-        !bt_profiles[index].valid) {
-        return 0;
-    }
-    return bt_profile_v30_cfg_hash(&bt_profiles[index].in_cfg);
-}
-
-static void bt_profile_v35_identity_from_profile(
-    struct bt_profile_v35_identity *out, int32_t index)
-{
-    memset(out, 0, sizeof(*out));
-    if (index < 0 || index >= BT_PROFILE_MAX ||
-        !bt_profiles[index].valid) {
-        return;
-    }
-    out->valid = 1;
-    out->addr_type = bt_profiles[index].addr_type;
-    out->system_id = bt_profiles[index].system_id;
-    out->source_id = bt_profiles[index].source_id;
-    out->source_out_idx = bt_profiles[index].source_out_idx;
-    memcpy(out->bdaddr, bt_profiles[index].bdaddr, sizeof(out->bdaddr));
-    out->profile_index = (uint32_t)index;
-    out->profile_hash = bt_profile_v35_profile_hash(index);
-}
-
-static void bt_profile_v35_ring_push(
-    uint8_t type, int8_t profile, uint8_t source, uint32_t seq,
-    int32_t result, uint32_t pb, uint32_t pa,
-    uint32_t tb, uint32_t ta, uint32_t rb, uint32_t ra)
-{
-    struct bt_profile_v35_event *event =
-        &bt_profile_v35_ring[bt_profile_v35_ring_head];
-
-    event->kind = 9;
-    event->type = type;
-    event->profile = profile;
-    event->source = source;
-    event->seq = seq;
-    event->result = result;
-    event->profile_before = pb;
-    event->profile_after = pa;
-    event->table_before = tb;
-    event->table_after = ta;
-    event->runtime_before = rb;
-    event->runtime_after = ra;
-
-    bt_profile_v35_ring_head =
-        (uint8_t)((bt_profile_v35_ring_head + 1U) %
-                  BT_PROFILE_V35_RING_CAPACITY);
-    if (bt_profile_v35_ring_count < BT_PROFILE_V35_RING_CAPACITY) {
-        bt_profile_v35_ring_count++;
-    }
-}
-
-uint32_t config_bt_profile_v35_ring_meta(uint8_t *data, uint32_t max_len)
-{
-    uint8_t payload[20] = {0};
-    uint32_t oldest = 0;
-    uint32_t newest = 0;
-    payload[0] = 9;
-    payload[1] = bt_profile_v35_ring_count;
-    payload[2] = BT_PROFILE_V35_RING_CAPACITY;
-    payload[3] = bt_profile_v35_ring_head;
-    if (bt_profile_v35_ring_count > 0) {
-        uint8_t first = (uint8_t)((bt_profile_v35_ring_head +
-            BT_PROFILE_V35_RING_CAPACITY - bt_profile_v35_ring_count) %
-            BT_PROFILE_V35_RING_CAPACITY);
-        uint8_t last = (uint8_t)((bt_profile_v35_ring_head +
-            BT_PROFILE_V35_RING_CAPACITY - 1U) %
-            BT_PROFILE_V35_RING_CAPACITY);
-        oldest = bt_profile_v35_ring[first].seq;
-        newest = bt_profile_v35_ring[last].seq;
-    }
-    memcpy(&payload[4], &oldest, 4);
-    memcpy(&payload[8], &newest, 4);
-    {
-        uint32_t ph = bt_profile_v35_profile_hash(0);
-        uint32_t rh = bt_profile_v30_cfg_hash(&config.in_cfg[0]);
-        memcpy(&payload[12], &ph, 4);
-        memcpy(&payload[16], &rh, 4);
-    }
-    if (!data || max_len < sizeof(payload)) {
-        return 0;
-    }
-    memcpy(data, payload, sizeof(payload));
-    return sizeof(payload);
-}
-
-uint32_t config_bt_profile_v35_ring_event(
-    uint8_t logical_index, uint8_t *data, uint32_t max_len)
-{
-    uint8_t first;
-    uint8_t physical;
-    if (logical_index >= bt_profile_v35_ring_count ||
-        !data || max_len < 20) {
-        return 0;
-    }
-    first = (uint8_t)((bt_profile_v35_ring_head +
-        BT_PROFILE_V35_RING_CAPACITY - bt_profile_v35_ring_count) %
-        BT_PROFILE_V35_RING_CAPACITY);
-    physical = (uint8_t)((first + logical_index) %
-        BT_PROFILE_V35_RING_CAPACITY);
-    memcpy(data, &bt_profile_v35_ring[physical], 20);
-    return 20;
-}
-
-uint32_t config_bt_profile_v35_find_diag(uint8_t *data, uint32_t max_len)
-{
-    uint8_t payload[20] = {0};
-    payload[0] = 10;
-    payload[1] = bt_profile_v35_find_last.lookup.valid;
-    payload[2] = bt_profile_v35_find_last.found.valid;
-    payload[3] = (uint8_t)bt_profile_v35_find_last.result;
-    memcpy(&payload[4], &bt_profile_v35_find_last.lookup.system_id, 4);
-    memcpy(&payload[8], &bt_profile_v35_find_last.found.system_id, 4);
-    memcpy(&payload[12], bt_profile_v35_find_last.lookup.bdaddr, 6);
-    payload[18] = bt_profile_v35_find_last.found.addr_type;
-    payload[19] = bt_profile_v35_find_last.lookup.addr_type;
-    if (!data || max_len < sizeof(payload)) {
-        return 0;
-    }
-    memcpy(data, payload, sizeof(payload));
-    return sizeof(payload);
-}
-
-uint32_t config_bt_profile_v35_find_extra_diag(
-    uint8_t *data, uint32_t max_len)
-{
-    uint8_t payload[20] = {0};
-    payload[0] = 11;
-    memcpy(&payload[1], &bt_profile_v35_find_last.lookup.source_id, 4);
-    memcpy(&payload[5], &bt_profile_v35_find_last.lookup.source_out_idx, 4);
-    memcpy(&payload[9], &bt_profile_v35_find_last.found.source_id, 4);
-    memcpy(&payload[13], &bt_profile_v35_find_last.found.source_out_idx, 4);
-    memcpy(&payload[17], bt_profile_v35_find_last.found.bdaddr, 3);
-    if (!data || max_len < sizeof(payload)) {
-        return 0;
-    }
-    memcpy(data, payload, sizeof(payload));
-    return sizeof(payload);
-}
-
-uint32_t config_bt_profile_v35_nvs_diag(uint8_t *data, uint32_t max_len)
-{
-    uint8_t payload[20] = {0};
-    payload[0] = 12;
-    memcpy(&payload[1], &bt_profile_v35_nvs_last.open_err, 4);
-    memcpy(&payload[5], &bt_profile_v35_nvs_last.get_err, 4);
-    memcpy(&payload[9], &bt_profile_v35_nvs_last.stored_size, 4);
-    memcpy(&payload[13], &bt_profile_v35_nvs_last.expected_size, 4);
-    memcpy(&payload[17], &bt_profile_v35_nvs_last.profile0_hash_after_load, 3);
-    if (!data || max_len < sizeof(payload)) {
-        return 0;
-    }
-    memcpy(data, payload, sizeof(payload));
-    return sizeof(payload);
-}
-
-static uint32_t bt_profile_v35_profile_hash(int32_t index);
-static void bt_profile_v35_ring_push(
-    uint8_t type, int8_t profile, uint8_t source, uint32_t seq,
-    int32_t result, uint32_t pb, uint32_t pa,
-    uint32_t tb, uint32_t ta, uint32_t rb, uint32_t ra);
-
-static void bt_profile_v31_event(uint8_t type, int8_t profile_index,
-                                 int32_t result, uint32_t before,
-                                 uint32_t after)
-{
-    bt_profile_v31_state_last.seq++;
-    bt_profile_v31_last.kind = 1;
-    bt_profile_v31_last.event_type = type;
-    bt_profile_v31_last.profile_index = profile_index;
-    bt_profile_v31_last.config_source = (uint8_t)config_get_src();
-    bt_profile_v31_last.seq = bt_profile_v31_state_last.seq;
-    bt_profile_v31_last.result = result;
-    bt_profile_v31_last.hash_before = before;
-    bt_profile_v31_last.hash_after = after;
-
-    bt_profile_v32_ring_push(
-        type,
-        profile_index,
-        bt_profile_v31_last.config_source,
-        bt_profile_v31_last.seq,
-        result,
-        before,
-        after);
-
-    bt_profile_v35_ring_push(
-        type,
-        profile_index,
-        bt_profile_v31_last.config_source,
-        bt_profile_v31_last.seq,
-        result,
-        before,
-        after,
-        bt_profile_v30_table_hash(),
-        bt_profile_v30_table_hash(),
-        bt_profile_v30_cfg_hash(&config.in_cfg[0]),
-        bt_profile_v30_cfg_hash(&config.in_cfg[0]));
-
-    bt_profile_v31_state_update();
-}
-
-
-
-uint32_t config_bt_profile_v31_event_diag(uint8_t *data, uint32_t max_len)
-{
-    const uint32_t size = sizeof(bt_profile_v31_last);
-    if (!data || max_len < size) {
-        return 0;
-    }
-    memcpy(data, &bt_profile_v31_last, size);
-    return size;
-}
-
-uint32_t config_bt_profile_v31_state_diag(uint8_t *data, uint32_t max_len)
-{
-    uint8_t payload[20] = {0};
-    payload[0] = 2;
-    payload[1] = bt_profile_v31_state_last.profile0_valid;
-    payload[2] = bt_profile_v31_state_last.profile0_map_size;
-    payload[3] = bt_profile_v31_state_last.profile_count;
-    memcpy(&payload[4], &bt_profile_v31_state_last.profile0_hash, 4);
-    memcpy(&payload[8], &bt_profile_v31_state_last.table_hash, 4);
-    memcpy(&payload[12], &bt_profile_v31_state_last.runtime_hash, 4);
-    memcpy(&payload[16], &bt_profile_v31_state_last.seq, 4);
-
-    if (!data || max_len < sizeof(payload)) {
-        return 0;
-    }
-    memcpy(data, payload, sizeof(payload));
-    return sizeof(payload);
-}
-
-uint32_t config_bt_profile_v31_nvs_diag(uint8_t *data, uint32_t max_len)
-{
-    uint8_t payload[20] = {0};
-    payload[0] = 3;
-    memcpy(&payload[1], &bt_profile_v31_state_last.nvs_open_err, 4);
-    memcpy(&payload[5], &bt_profile_v31_state_last.nvs_get_err, 4);
-    memcpy(&payload[9], &bt_profile_v31_state_last.stored_size, 4);
-    memcpy(&payload[13], &bt_profile_v31_state_last.expected_size, 4);
-    memcpy(&payload[17], &bt_profile_v31_state_last.loaded_hash, 4);
-
-    if (!data || max_len < sizeof(payload)) {
-        return 0;
-    }
-    memcpy(data, payload, sizeof(payload));
-    return sizeof(payload);
-}
-
-struct bt_profile_v36_save_diag {
-    int32_t open_err;
-    int32_t set_err;
-    int32_t commit_err;
-    uint32_t profile_size;
-    uint32_t used_entries;
-    uint32_t free_entries;
-    uint32_t total_entries;
-    uint32_t table_hash;
-} __packed;
-
-static struct bt_profile_v36_save_diag bt_profile_v36_save_last;
-
-uint32_t config_bt_profile_v36_save_diag(uint8_t *data, uint32_t max_len)
-{
-    uint8_t payload[20] = {0};
-
-    payload[0] = 13;
-    memcpy(&payload[1], &bt_profile_v36_save_last.open_err, 4);
-    memcpy(&payload[5], &bt_profile_v36_save_last.set_err, 4);
-    memcpy(&payload[9], &bt_profile_v36_save_last.commit_err, 4);
-    memcpy(&payload[13], &bt_profile_v36_save_last.free_entries, 4);
-    memcpy(&payload[17], &bt_profile_v36_save_last.profile_size, 3);
-
-    if (!data || max_len < sizeof(payload)) {
-        return 0;
-    }
-
-    memcpy(data, payload, sizeof(payload));
-    return sizeof(payload);
-}
-
 static int32_t bt_profile_save_one(uint8_t profile_id)
 {
     if (profile_id >= BT_PROFILE_MAX) {
@@ -967,23 +382,8 @@ static int32_t bt_profile_save_one(uint8_t profile_id)
              (unsigned)profile_id);
 
     if (oe == ESP_OK) {
-        nvs_stats_t stats = {0};
-        nvs_get_stats(BT_PROFILE_NVS_NS, &stats);
-
-        bt_profile_v36_save_last.open_err = oe;
-        bt_profile_v36_save_last.set_err = ESP_FAIL;
-        bt_profile_v36_save_last.commit_err = ESP_FAIL;
-        bt_profile_v36_save_last.profile_size =
-            (uint32_t)sizeof(bt_profiles[profile_id]);
-        bt_profile_v36_save_last.used_entries = stats.used_entries;
-        bt_profile_v36_save_last.free_entries = stats.free_entries;
-        bt_profile_v36_save_last.total_entries = stats.total_entries;
-        bt_profile_v36_save_last.table_hash =
-            bt_profile_v30_table_hash();
-
         se = nvs_set_blob(nvs, key, &bt_profiles[profile_id],
                           sizeof(bt_profiles[profile_id]));
-        bt_profile_v36_save_last.set_err = se;
 
         if (se == ESP_OK) {
             ce = nvs_commit(nvs);
@@ -992,31 +392,8 @@ static int32_t bt_profile_save_one(uint8_t profile_id)
             fe = se;
         }
 
-        nvs_stats_t stats_after = {0};
-        nvs_get_stats(BT_PROFILE_NVS_NS, &stats_after);
-        bt_profile_v36_save_last.commit_err = ce;
-        bt_profile_v36_save_last.used_entries = stats_after.used_entries;
-        bt_profile_v36_save_last.free_entries = stats_after.free_entries;
-        bt_profile_v36_save_last.total_entries = stats_after.total_entries;
-        bt_profile_v36_save_last.table_hash =
-            bt_profile_v30_table_hash();
-
         nvs_close(nvs);
     }
-
-    uint32_t before = bt_profile_v30_table_hash();
-    uint32_t after = bt_profile_v30_table_hash();
-    uint32_t aux = ((uint32_t)se & 0xffffU) |
-                   (((uint32_t)ce & 0xffffU) << 16);
-
-    bt_profile_v30_trace(V30_SAVE, (int8_t)profile_id,
-                         bt_profiles[profile_id].source_out_idx,
-                         fe, before, after, aux);
-    bt_profile_v31_event(2, (int8_t)profile_id, fe, before, after);
-
-    printf("# V36_SAVE profile=%u open=%ld set=%ld commit=%ld size=%lu\n",
-           (unsigned)profile_id, (long)oe, (long)se, (long)ce,
-           (unsigned long)sizeof(bt_profiles[profile_id]));
 
     return fe == ESP_OK ? 0 : -1;
 }
@@ -1091,7 +468,6 @@ void config_bt_profile_init(void)
     if (open_err == ESP_OK) {
         stored_size = requested_size;
         get_err = nvs_get_blob(nvs, BT_PROFILE_NVS_KEY, bt_profiles, &stored_size);
-        if (get_err == ESP_OK && stored_size == sizeof(bt_profiles)) bt_profile_v30_snap.loaded_blob_hash = bt_profile_v30_table_hash();
         nvs_close(nvs);
     }
 
@@ -1117,24 +493,8 @@ void config_bt_profile_init(void)
         bt_profile_nvs_last.action_loaded = 1;
     }
 
-    bt_profile_v30_snap.open_err=open_err; bt_profile_v30_snap.get_err=get_err;
-    bt_profile_v30_snap.stored_size=(uint32_t)stored_size; bt_profile_v30_snap.expected_size=(uint32_t)sizeof(bt_profiles);
-    bt_profile_v30_trace(V30_NVS_LOAD,-1,0,(open_err!=ESP_OK)?open_err:get_err,0,bt_profile_v30_table_hash(),(uint32_t)stored_size);
 
-    bt_profile_v31_event(
-        1, -1,
-        (open_err != ESP_OK) ? open_err : get_err,
-        0,
-        bt_profile_v30_table_hash());
 
-    bt_profile_v35_nvs_last.open_err = open_err;
-    bt_profile_v35_nvs_last.get_err = get_err;
-    bt_profile_v35_nvs_last.stored_size = (uint32_t)stored_size;
-    bt_profile_v35_nvs_last.expected_size = (uint32_t)sizeof(bt_profiles);
-    bt_profile_v35_nvs_last.table_hash_after_load =
-        bt_profile_v30_table_hash();
-    bt_profile_v35_nvs_last.profile0_hash_after_load =
-        bt_profile_v35_profile_hash(0);
 
 
     if (open_err == ESP_OK) {
@@ -1219,71 +579,6 @@ void config_bt_profile_init(void)
 
 
 
-struct bt_profile_v34_ensure_diag {
-    uint8_t kind;
-    uint8_t is_new;
-    int8_t profile_index;
-    uint8_t found;
-    uint32_t find_result;
-    uint32_t table_before;
-    uint32_t profile_before;
-    uint32_t runtime_before;
-    uint32_t table_after;
-    uint32_t profile_after;
-    uint32_t runtime_after;
-    uint32_t seq;
-} __packed;
-
-static struct bt_profile_v34_ensure_diag bt_profile_v34_ensure_last;
-
-uint32_t config_bt_profile_v34_ensure_diag(uint8_t *data, uint32_t max_len)
-{
-    const uint32_t size = sizeof(bt_profile_v34_ensure_last);
-    if (!data || max_len < size) {
-        return 0;
-    }
-    memcpy(data, &bt_profile_v34_ensure_last, size);
-    return size;
-}
-
-uint32_t config_bt_profile_v34_ensure_pre_diag(uint8_t *data, uint32_t max_len)
-{
-    uint8_t payload[20] = {0};
-
-    payload[0] = 6;
-    payload[1] = bt_profile_v34_ensure_last.is_new;
-    payload[2] = (uint8_t)bt_profile_v34_ensure_last.profile_index;
-    payload[3] = bt_profile_v34_ensure_last.found;
-    memcpy(&payload[4], &bt_profile_v34_ensure_last.find_result, 4);
-    memcpy(&payload[8], &bt_profile_v34_ensure_last.table_before, 4);
-    memcpy(&payload[12], &bt_profile_v34_ensure_last.profile_before, 4);
-    memcpy(&payload[16], &bt_profile_v34_ensure_last.runtime_before, 4);
-
-    if (!data || max_len < sizeof(payload)) {
-        return 0;
-    }
-    memcpy(data, payload, sizeof(payload));
-    return sizeof(payload);
-}
-
-uint32_t config_bt_profile_v34_ensure_post_diag(uint8_t *data, uint32_t max_len)
-{
-    uint8_t payload[20] = {0};
-
-    payload[0] = 7;
-    memcpy(&payload[1], &bt_profile_v34_ensure_last.table_after, 4);
-    memcpy(&payload[5], &bt_profile_v34_ensure_last.profile_after, 4);
-    memcpy(&payload[9], &bt_profile_v34_ensure_last.runtime_after, 4);
-    memcpy(&payload[13], &bt_profile_v34_ensure_last.seq, 4);
-    memcpy(&payload[17], &bt_profile_v34_ensure_last.find_result, 4);
-
-    if (!data || max_len < sizeof(payload)) {
-        return 0;
-    }
-    memcpy(data, payload, sizeof(payload));
-    return sizeof(payload);
-}
-
 int32_t config_bt_profile_ensure(uint8_t dev_id, uint8_t out_idx)
 {
     struct bt_dev *device = NULL;
@@ -1319,36 +614,8 @@ int32_t config_bt_profile_ensure(uint8_t dev_id, uint8_t out_idx)
                __FUNCTION__, dev_id);
         return -1;
     }
-int32_t index = bt_profile_find((uint8_t)wired_adapter.system_id, bdaddr);
+    int32_t index = bt_profile_find((uint8_t)wired_adapter.system_id, bdaddr);
     bool is_new = false;
-
-    uint32_t table_before_v35 = bt_profile_v30_table_hash();
-    uint32_t runtime_before_v35 =
-        bt_profile_v30_cfg_hash(&config.in_cfg[out_idx]);
-    uint32_t profile_before_v35 = 0;
-
-    if (index >= 0 &&
-        index < BT_PROFILE_MAX &&
-        bt_profiles[index].valid) {
-        profile_before_v35 =
-            bt_profile_v30_cfg_hash(&bt_profiles[index].in_cfg);
-    }
-
-    memset(&bt_profile_v35_find_last, 0,
-           sizeof(bt_profile_v35_find_last));
-    bt_profile_v35_find_last.result = index;
-    bt_profile_v35_find_last.lookup.valid = 1;
-    bt_profile_v35_find_last.lookup.addr_type = addr_type;
-    bt_profile_v35_find_last.lookup.system_id =
-        (uint8_t)wired_adapter.system_id;
-    bt_profile_v35_find_last.lookup.source_id =
-        bt_profile_source_id(device);
-    bt_profile_v35_find_last.lookup.source_out_idx = out_idx;
-    memcpy(bt_profile_v35_find_last.lookup.bdaddr,
-           bdaddr, sizeof(bt_profile_v35_find_last.lookup.bdaddr));
-    bt_profile_v35_identity_from_profile(
-        &bt_profile_v35_find_last.found, index);
-
     bool metadata_changed = false;
 
     if (index < 0) {
@@ -1422,28 +689,8 @@ int32_t index = bt_profile_find((uint8_t)wired_adapter.system_id, bdaddr);
     }
 
 
-    uint32_t table_after_v35 = bt_profile_v30_table_hash();
-    uint32_t runtime_after_v35 =
-        bt_profile_v30_cfg_hash(&config.in_cfg[out_idx]);
-    uint32_t profile_after_v35 =
-        bt_profile_v35_profile_hash(index);
 
-    bt_profile_v35_find_last.result = index;
-    bt_profile_v35_identity_from_profile(
-        &bt_profile_v35_find_last.found, index);
 
-    bt_profile_v35_ring_push(
-        3,
-        (int8_t)index,
-        (uint8_t)config_get_src(),
-        0,
-        is_new ? -1 : 0,
-        profile_before_v35,
-        profile_after_v35,
-        table_before_v35,
-        table_after_v35,
-        runtime_before_v35,
-        runtime_after_v35);
     printf("# %s: profile=%ld new=%u dev=%u out=%u addr=%02X:%02X:%02X:%02X:%02X:%02X name=%s\\n",
            __FUNCTION__, (long)index, is_new ? 1 : 0, dev_id, out_idx,
            bdaddr[5], bdaddr[4], bdaddr[3], bdaddr[2], bdaddr[1], bdaddr[0],
@@ -1693,8 +940,6 @@ int32_t config_bt_profile_apply(uint8_t dev_id, uint8_t out_idx)
     bt_profile_apply_last.map_size = config.in_cfg[out_idx].map_size;
     bt_profile_apply_last.map_hash_after =
         bt_profile_apply_hash_cfg(&config.in_cfg[out_idx]);
-    bt_profile_v31_event(4, (int8_t)index, index, bt_profile_apply_last.map_hash_before, bt_profile_apply_last.map_hash_after);
-    bt_profile_v30_trace(V30_APPLY,(int8_t)index,out_idx,index,bt_profile_apply_last.map_hash_before,bt_profile_apply_last.map_hash_after,bt_profiles[index].source_out_idx);
 
     return index;
 }
@@ -2090,7 +1335,6 @@ void config_bt_profile_sync(void)
 
 void config_bt_profile_clear(void)
 {
-    uint32_t before = bt_profile_v30_table_hash();
 
     memset(bt_profiles, 0, sizeof(bt_profiles));
     bt_profiles_loaded = true;
@@ -2122,21 +1366,7 @@ void config_bt_profile_clear(void)
         result = -1;
     }
 
-    bt_profile_v31_event(
-        7,
-        -1,
-        result,
-        before,
-        bt_profile_v30_table_hash());
 
-    bt_profile_v30_trace(
-        V30_CLEAR,
-        -1,
-        0,
-        result,
-        before,
-        bt_profile_v30_table_hash(),
-        0);
 }
 
 
@@ -2186,17 +1416,7 @@ int32_t config_bt_profile_write(uint8_t profile_id, const uint8_t *data,
      * config_bt_profile_commit(). This avoids partial NVS writes and removes
      * the dependency on large GATT writeValue() operations.
      */
-    uint32_t before=bt_profile_v30_cfg_hash(&bt_profiles[profile_id].in_cfg);
-    uint32_t before_hash =
-        bt_profile_v31_cfg_hash(&bt_profiles[profile_id].in_cfg);
-
     memcpy((uint8_t *)&bt_profiles[profile_id].in_cfg + offset, data, len);
-
-    uint32_t after_hash =
-        bt_profile_v31_cfg_hash(&bt_profiles[profile_id].in_cfg);
-    uint32_t after=bt_profile_v30_cfg_hash(&bt_profiles[profile_id].in_cfg);
-    bt_profile_v31_event(8, (int8_t)profile_id, 0, before_hash, after_hash);
-    bt_profile_v30_trace(V30_WRITE,(int8_t)profile_id,0,0,before,after,(offset&0xffffu)|((len&0xffffu)<<16));
     return 0;
 }
 
@@ -2213,8 +1433,6 @@ int32_t config_bt_profile_commit(uint8_t profile_id)
     }
 
     int32_t result=bt_profile_save_one(profile_id);
-    bt_profile_v31_event(9, (int8_t)profile_id, result, 0, bt_profile_v31_cfg_hash(&bt_profiles[profile_id].in_cfg));
-    bt_profile_v30_trace(V30_COMMIT,(int8_t)profile_id,bt_profiles[profile_id].source_out_idx,result,0,bt_profile_v30_cfg_hash(&bt_profiles[profile_id].in_cfg),0);
     return result;
 }
 
@@ -2668,17 +1886,9 @@ void config_init(uint32_t src) {
         }
     }
 
-    uint32_t profile_table_before_config_init = bt_profile_v30_table_hash();
     config_load_from_file(&config, filename);
 
-    bt_profile_v31_event(
-        10,
-        -1,
-        0,
-        profile_table_before_config_init,
-        bt_profile_v30_table_hash());
 
-    bt_profile_v30_trace(V30_CONFIG_INIT,-1,0,0,0,bt_profile_v30_cfg_hash(&config.in_cfg[0]),(uint32_t)config_src);
     if (config_rst_bare_core && config_is_rst_required()) {
         sys_mgr_cmd(SYS_MGR_CMD_WIRED_RST);
         printf("# %s: Reloaded wired core cfg: %s\n", __FUNCTION__, filename);
@@ -2699,18 +1909,9 @@ void config_update(uint32_t dst) {
 
     /* Global/console/game saves are independent of controller profiles.
      * A controller profile is modified only through its explicit profile write. */
-    uint32_t before=bt_profile_v30_cfg_hash(&config.in_cfg[0]);
-    uint32_t profile_table_before_update = bt_profile_v30_table_hash();
     config_store_on_file(&config, filename);
 
-    bt_profile_v31_event(
-        11,
-        -1,
-        0,
-        profile_table_before_update,
-        bt_profile_v30_table_hash());
 
-    bt_profile_v30_trace(V30_CONFIG_UPDATE,-1,0,0,before,bt_profile_v30_cfg_hash(&config.in_cfg[0]),(uint32_t)config_src);
     if (config_rst_bare_core && config_is_rst_required()) {
         sys_mgr_cmd(SYS_MGR_CMD_WIRED_RST);
         printf("# %s: Reloaded wired core cfg: %s\n", __FUNCTION__, filename);

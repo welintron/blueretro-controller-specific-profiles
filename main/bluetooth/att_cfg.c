@@ -41,21 +41,6 @@
 #define CFG_CMD_GET_BT_PROFILE_ADDR_DIAG 0x15
 #define CFG_CMD_GET_BT_PROFILE_HASH_DIAG 0x16
 #define CFG_CMD_GET_BT_PROFILE_NVS_DIAG 0x17
-#define CFG_CMD_GET_BT_PROFILE_V30_EVENT 0x18
-#define CFG_CMD_GET_BT_PROFILE_V30_SNAPSHOT 0x19
-#define CFG_CMD_GET_BT_PROFILE_V31_EVENT 0x1A
-#define CFG_CMD_GET_BT_PROFILE_V31_STATE 0x1B
-#define CFG_CMD_GET_BT_PROFILE_V31_NVS 0x1C
-#define CFG_CMD_GET_BT_PROFILE_V32_RING_META 0x1D
-#define CFG_CMD_GET_BT_PROFILE_V32_RING_EVENT 0x1E
-#define CFG_CMD_GET_BT_PROFILE_V34_ENSURE_PRE 0x1F
-#define CFG_CMD_GET_BT_PROFILE_V34_ENSURE_POST 0x20
-#define CFG_CMD_GET_BT_PROFILE_V35_RING_META 0x21
-#define CFG_CMD_GET_BT_PROFILE_V35_RING_EVENT 0x22
-#define CFG_CMD_GET_BT_PROFILE_V35_FIND 0x23
-#define CFG_CMD_GET_BT_PROFILE_V35_FIND_EXTRA 0x24
-#define CFG_CMD_GET_BT_PROFILE_V35_NVS 0x25
-#define CFG_CMD_GET_BT_PROFILE_V36_SAVE 0x26
 #define CFG_CMD_SET_DEFAULT_CFG 0x10
 #define CFG_CMD_SET_GAMEID_CFG 0x11
 #define CFG_CMD_OPEN_DIR 0x12
@@ -550,139 +535,28 @@ static void bt_att_cfg_cmd_bt_profile_nvs_diag_rsp(uint16_t handle)
                len);
 }
 
-static void bt_att_cfg_cmd_bt_profile_v30_event_rsp(uint16_t handle){
-    uint8_t tmp[32]; uint32_t len=config_bt_profile_v30_event_diag(tmp,sizeof(tmp));
-    if(len==0||bt_profile_query_offset>=len){bt_att_cmd(handle,BT_ATT_OP_READ_RSP,0);return;}
-    len-=bt_profile_query_offset;if(len>20)len=20;memcpy(bt_hci_pkt_tmp.att_data,tmp+bt_profile_query_offset,len);
-    bt_att_cmd(handle,bt_profile_query_offset?BT_ATT_OP_READ_BLOB_RSP:BT_ATT_OP_READ_RSP,len);
-}
-static void bt_att_cfg_cmd_bt_profile_v30_snapshot_rsp(uint16_t handle){
-    uint8_t tmp[40]; uint32_t len=config_bt_profile_v30_snapshot_diag(tmp,sizeof(tmp));
-    if(len==0||bt_profile_query_offset>=len){bt_att_cmd(handle,BT_ATT_OP_READ_RSP,0);return;}
-    len-=bt_profile_query_offset;if(len>20)len=20;memcpy(bt_hci_pkt_tmp.att_data,tmp+bt_profile_query_offset,len);
-    bt_att_cmd(handle,bt_profile_query_offset?BT_ATT_OP_READ_BLOB_RSP:BT_ATT_OP_READ_RSP,len);
-}
-static void bt_att_cfg_cmd_bt_profile_v31_event_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len=config_bt_profile_v31_event_diag(tmp,sizeof(tmp));
-    if (len > 20) len=20;
-    memcpy(bt_hci_pkt_tmp.att_data,tmp,len);
-    bt_att_cmd(handle,BT_ATT_OP_READ_RSP,len);
-}
-static void bt_att_cfg_cmd_bt_profile_v31_state_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len=config_bt_profile_v31_state_diag(tmp,sizeof(tmp));
-    if (len > 20) len=20;
-    memcpy(bt_hci_pkt_tmp.att_data,tmp,len);
-    bt_att_cmd(handle,BT_ATT_OP_READ_RSP,len);
-}
-static void bt_att_cfg_cmd_bt_profile_v31_nvs_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len=config_bt_profile_v31_nvs_diag(tmp,sizeof(tmp));
-    if (len > 20) len=20;
-    memcpy(bt_hci_pkt_tmp.att_data,tmp,len);
-    bt_att_cmd(handle,BT_ATT_OP_READ_RSP,len);
-}
-
-static void bt_att_cfg_cmd_bt_profile_v32_ring_meta_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len = config_bt_profile_v32_ring_meta(tmp, sizeof(tmp));
-    if (len > 20U) {
-        len = 20U;
-    }
-    memcpy(bt_hci_pkt_tmp.att_data, tmp, len);
-    bt_att_cmd(handle, BT_ATT_OP_READ_RSP, len);
-}
-
-static void bt_att_cfg_cmd_bt_profile_v32_ring_event_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len = config_bt_profile_v32_ring_event(
-        bt_profile_query_id, tmp, sizeof(tmp));
-    if (len > 20U) {
-        len = 20U;
-    }
-    memcpy(bt_hci_pkt_tmp.att_data, tmp, len);
-    bt_att_cmd(handle, BT_ATT_OP_READ_RSP, len);
-}
-
-static void bt_att_cfg_cmd_bt_profile_v34_ensure_pre_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len = config_bt_profile_v34_ensure_pre_diag(tmp, sizeof(tmp));
-    if (len > 20U) len = 20U;
-    memcpy(bt_hci_pkt_tmp.att_data, tmp, len);
-    bt_att_cmd(handle, BT_ATT_OP_READ_RSP, len);
-}
-
-static void bt_att_cfg_cmd_bt_profile_v34_ensure_post_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len = config_bt_profile_v34_ensure_post_diag(tmp, sizeof(tmp));
-    if (len > 20U) len = 20U;
-    memcpy(bt_hci_pkt_tmp.att_data, tmp, len);
-    bt_att_cmd(handle, BT_ATT_OP_READ_RSP, len);
-}
 
 
-static void bt_att_cfg_cmd_bt_profile_v35_ring_meta_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len=config_bt_profile_v35_ring_meta(tmp,sizeof(tmp));
-    if(len>20U){len=20U;}
-    memcpy(bt_hci_pkt_tmp.att_data,tmp,len);
-    bt_att_cmd(handle,BT_ATT_OP_READ_RSP,len);
-}
-static void bt_att_cfg_cmd_bt_profile_v35_ring_event_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len=config_bt_profile_v35_ring_event(bt_profile_query_id,tmp,sizeof(tmp));
-    if(len>20U){len=20U;}
-    memcpy(bt_hci_pkt_tmp.att_data,tmp,len);
-    bt_att_cmd(handle,BT_ATT_OP_READ_RSP,len);
-}
-static void bt_att_cfg_cmd_bt_profile_v35_find_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len=config_bt_profile_v35_find_diag(tmp,sizeof(tmp));
-    if(len>20U){len=20U;}
-    memcpy(bt_hci_pkt_tmp.att_data,tmp,len);
-    bt_att_cmd(handle,BT_ATT_OP_READ_RSP,len);
-}
-static void bt_att_cfg_cmd_bt_profile_v35_find_extra_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len=config_bt_profile_v35_find_extra_diag(tmp,sizeof(tmp));
-    if(len>20U){len=20U;}
-    memcpy(bt_hci_pkt_tmp.att_data,tmp,len);
-    bt_att_cmd(handle,BT_ATT_OP_READ_RSP,len);
-}
-static void bt_att_cfg_cmd_bt_profile_v35_nvs_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len=config_bt_profile_v35_nvs_diag(tmp,sizeof(tmp));
-    if(len>20U){len=20U;}
-    memcpy(bt_hci_pkt_tmp.att_data,tmp,len);
-    bt_att_cmd(handle,BT_ATT_OP_READ_RSP,len);
-}
 
-static void bt_att_cfg_cmd_bt_profile_v36_save_rsp(uint16_t handle)
-{
-    uint8_t tmp[20];
-    uint32_t len = config_bt_profile_v36_save_diag(
-        tmp, sizeof(tmp));
 
-    if (len > 20U) {
-        len = 20U;
-    }
 
-    memcpy(bt_hci_pkt_tmp.att_data, tmp, len);
-    bt_att_cmd(handle, BT_ATT_OP_READ_RSP, len);
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 static void bt_att_cfg_cmd_bt_profile_cfg_rsp(uint16_t handle)
 {
@@ -814,51 +688,7 @@ static void bt_att_cfg_cmd_rd_hdlr(uint16_t handle) {
         case CFG_CMD_GET_BT_PROFILE_NVS_DIAG:
             bt_att_cfg_cmd_bt_profile_nvs_diag_rsp(handle);
             break;
-        case CFG_CMD_GET_BT_PROFILE_V30_EVENT:
-            bt_att_cfg_cmd_bt_profile_v30_event_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V30_SNAPSHOT:
-            bt_att_cfg_cmd_bt_profile_v30_snapshot_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V31_EVENT:
-            bt_att_cfg_cmd_bt_profile_v31_event_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V31_STATE:
-            bt_att_cfg_cmd_bt_profile_v31_state_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V31_NVS:
-            bt_att_cfg_cmd_bt_profile_v31_nvs_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V32_RING_META:
-            bt_att_cfg_cmd_bt_profile_v32_ring_meta_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V32_RING_EVENT:
-            bt_att_cfg_cmd_bt_profile_v32_ring_event_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V34_ENSURE_PRE:
-            bt_att_cfg_cmd_bt_profile_v34_ensure_pre_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V34_ENSURE_POST:
-            bt_att_cfg_cmd_bt_profile_v34_ensure_post_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V35_RING_META:
-            bt_att_cfg_cmd_bt_profile_v35_ring_meta_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V35_RING_EVENT:
-            bt_att_cfg_cmd_bt_profile_v35_ring_event_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V35_FIND:
-            bt_att_cfg_cmd_bt_profile_v35_find_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V35_FIND_EXTRA:
-            bt_att_cfg_cmd_bt_profile_v35_find_extra_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V35_NVS:
-            bt_att_cfg_cmd_bt_profile_v35_nvs_rsp(handle);
-            break;
-        case CFG_CMD_GET_BT_PROFILE_V36_SAVE:
-            bt_att_cfg_cmd_bt_profile_v36_save_rsp(handle);
-            break;
+
         case CFG_CMD_GET_BT_PROFILE_CFG:
             bt_att_cfg_cmd_bt_profile_cfg_rsp(handle);
             break;
@@ -875,11 +705,7 @@ static void bt_att_cfg_cmd_wr_hdlr(struct bt_dev *device, uint8_t *data, uint32_
     if (cfg_cmd == CFG_CMD_GET_BT_PROFILE ||
         cfg_cmd == CFG_CMD_GET_BT_PROFILE_IDENTITY ||
         cfg_cmd == CFG_CMD_GET_BT_PROFILE_PERSISTENCE ||
-        cfg_cmd == CFG_CMD_GET_BT_PROFILE_NVS_DIAG ||
-        cfg_cmd == CFG_CMD_GET_BT_PROFILE_V30_EVENT ||
-        cfg_cmd == CFG_CMD_GET_BT_PROFILE_V30_SNAPSHOT ||
-        cfg_cmd == CFG_CMD_GET_BT_PROFILE_V32_RING_EVENT ||
-        cfg_cmd == CFG_CMD_GET_BT_PROFILE_V35_RING_EVENT) {
+        cfg_cmd == CFG_CMD_GET_BT_PROFILE_NVS_DIAG) {
         bt_profile_query_id = (len > 1) ? data[1] : 0;
         bt_profile_query_offset = (len > 3) ?
             (uint16_t)(data[2] | ((uint16_t)data[3] << 8)) : 0;
