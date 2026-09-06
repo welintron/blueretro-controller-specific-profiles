@@ -13,7 +13,7 @@ echo "[1/7] Verifying Docker..."
 docker version >/dev/null
 
 echo "[2/7] Pulling ESP-IDF image..."
-docker pull "$IMAGE"
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then docker pull "$IMAGE"; fi
 echo "[3/7] Creating build container..."
 docker create --entrypoint /bin/bash --name "$CONTAINER" "$IMAGE" -lc "sleep infinity" >/dev/null
 docker start "$CONTAINER" >/dev/null

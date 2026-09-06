@@ -60,6 +60,7 @@ set(srcs
     "system/delay.c"
     "system/fpga_config.c"
     "system/fs.c"
+    "system/custom_presets.c"
     "system/gpio.c"
     "system/intr.c"
     "system/led.c"
@@ -106,6 +107,25 @@ idf_component_register(
     SRCS "${srcs}" "${cov_srcs}"
     PRIV_INCLUDE_DIRS "."
     LDFRAGMENTS linker.lf
+    REQUIRES
+        bt
+        json
+        spiffs
+        esp_driver_gpio
+        esp_driver_ledc
+        esp_driver_spi
+        esp_driver_uart
+        esp_driver_i2c
+        esp_timer
+        esp_eth
+        esp_http_server
+        app_update
+        esp_event
+        nvs_flash
+        efuse
+        esp_netif
+        queue_bss
+        esp_ringbuf
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-address-of-packed-member)

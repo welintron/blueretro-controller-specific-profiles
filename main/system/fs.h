@@ -13,6 +13,8 @@
 #define CONFIG_FILE "/fs/config.bin"
 #define MEMORY_CARD_FILE "/fs/mc.bin"
 #define BITSTREAM_FILE "/fs/bitstream.bit"
+#define CUSTOM_PRESETS_FILE "/fs/custom-presets.json"
+#define CUSTOM_PRESETS_TMP_FILE "/fs/custom-presets.tmp"
 
 int32_t fs_init(void);
 void fs_reset(void);

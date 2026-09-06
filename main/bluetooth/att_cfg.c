@@ -19,6 +19,7 @@
 #include "adapter/gameid.h"
 #include "system/manager.h"
 #include "system/fs.h"
+#include "system/custom_presets.h"
 
 #define ATT_MAX_LEN 512
 #define BR_ABI_VER 2
@@ -41,6 +42,10 @@
 #define CFG_CMD_GET_BT_PROFILE_ADDR_DIAG 0x15
 #define CFG_CMD_GET_BT_PROFILE_HASH_DIAG 0x16
 #define CFG_CMD_GET_BT_PROFILE_NVS_DIAG 0x17
+#define CFG_CMD_GET_CUSTOM_PRESETS 0x27
+#define CFG_CMD_GET_CUSTOM_PRESETS_DATA 0x28
+#define CFG_CMD_SET_CUSTOM_PRESETS_DATA 0x29
+#define CFG_CMD_COMMIT_CUSTOM_PRESETS 0x2A
 #define CFG_CMD_SET_DEFAULT_CFG 0x10
 #define CFG_CMD_SET_GAMEID_CFG 0x11
 #define CFG_CMD_OPEN_DIR 0x12
@@ -108,6 +113,9 @@ static uint8_t bt_profile_query_id = 0;
 static uint16_t bt_profile_query_offset = 0;
 static DIR *d = NULL;
 static struct dirent *dir = NULL;
+static uint32_t custom_presets_write_total_len = 0;
+static uint32_t custom_presets_write_offset = 0;
+static uint32_t custom_presets_query_offset = 0;
 
 static void bt_att_cmd_gatt_char_read_type_rsp(uint16_t handle) {
     struct bt_att_read_type_rsp *rd_type_rsp = (struct bt_att_read_type_rsp *)bt_hci_pkt_tmp.att_data;
@@ -558,6 +566,51 @@ static void bt_att_cfg_cmd_bt_profile_nvs_diag_rsp(uint16_t handle)
 
 
 
+static void bt_att_cfg_cmd_custom_presets_rsp(uint16_t handle)
+{
+    uint32_t size = 0;
+    uint32_t checksum = 0;
+
+    if (custom_presets_get_size(&size) != 0 ||
+        custom_presets_get_checksum(&checksum) != 0) {
+        bt_att_cmd_error_rsp(handle, BT_ATT_OP_READ_REQ,
+                             BR_CFG_CMD_CHRC_HDL, BT_ATT_ERR_UNLIKELY);
+        return;
+    }
+
+    bt_hci_pkt_tmp.att_data[0] = CUSTOM_PRESETS_VERSION;
+    memcpy(&bt_hci_pkt_tmp.att_data[1], &size, sizeof(size));
+    memcpy(&bt_hci_pkt_tmp.att_data[5], &checksum, sizeof(checksum));
+
+    bt_att_cmd(handle, BT_ATT_OP_READ_RSP, 9);
+}
+
+static void bt_att_cfg_cmd_custom_presets_data_rsp(uint16_t handle, uint32_t offset, uint8_t opcode)
+{
+    uint32_t size = 0;
+    uint32_t len;
+
+    if (custom_presets_get_size(&size) != 0 || offset >= size) {
+        bt_att_cmd(handle, opcode, 0);
+        return;
+    }
+
+    len = size - offset;
+    if (len > (uint32_t)(mtu - 1)) {
+        len = mtu - 1;
+    }
+
+    if (custom_presets_read(offset, bt_hci_pkt_tmp.att_data, len) != (int)len) {
+        bt_att_cmd_error_rsp(handle,
+                             opcode == BT_ATT_OP_READ_BLOB_RSP ? BT_ATT_OP_READ_BLOB_REQ : BT_ATT_OP_READ_REQ,
+                             BR_CFG_CMD_CHRC_HDL, BT_ATT_ERR_UNLIKELY);
+        return;
+    }
+
+    bt_att_cmd(handle, opcode, len);
+    custom_presets_query_offset = offset + len;
+}
+
 static void bt_att_cfg_cmd_bt_profile_cfg_rsp(uint16_t handle)
 {
     uint8_t tmp[512];
@@ -689,6 +742,12 @@ static void bt_att_cfg_cmd_rd_hdlr(uint16_t handle) {
             bt_att_cfg_cmd_bt_profile_nvs_diag_rsp(handle);
             break;
 
+        case CFG_CMD_GET_CUSTOM_PRESETS:
+            bt_att_cfg_cmd_custom_presets_rsp(handle);
+            break;
+        case CFG_CMD_GET_CUSTOM_PRESETS_DATA:
+            bt_att_cfg_cmd_custom_presets_data_rsp(handle, custom_presets_query_offset, BT_ATT_OP_READ_RSP);
+            break;
         case CFG_CMD_GET_BT_PROFILE_CFG:
             bt_att_cfg_cmd_bt_profile_cfg_rsp(handle);
             break;
@@ -717,6 +776,11 @@ static void bt_att_cfg_cmd_wr_hdlr(struct bt_dev *device, uint8_t *data, uint32_
         in_cfg_offset = (len > 3) ?
             (uint16_t)(data[2] | ((uint16_t)data[3] << 8)) : 0;
     }
+    else if (cfg_cmd == CFG_CMD_GET_CUSTOM_PRESETS_DATA) {
+        custom_presets_query_offset = (len > 4) ?
+            (uint32_t)data[1] | ((uint32_t)data[2] << 8) |
+            ((uint32_t)data[3] << 16) | ((uint32_t)data[4] << 24) : 0;
+    }
 
     switch (cfg_cmd) {
         case CFG_CMD_COMMIT_BT_PROFILE_CFG:
@@ -728,6 +792,63 @@ static void bt_att_cfg_cmd_wr_hdlr(struct bt_dev *device, uint8_t *data, uint32_
             bt_att_cmd_wr_rsp(device->acl_handle);
             break;
 
+        case CFG_CMD_SET_CUSTOM_PRESETS_DATA:
+        {
+            uint32_t total_len;
+            uint32_t offset;
+
+            if (len < 9) {
+                bt_att_cmd_error_rsp(device->acl_handle, BT_ATT_OP_WRITE_REQ,
+                                     BR_CFG_CMD_CHRC_HDL, BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+                return;
+            }
+
+            total_len = (uint32_t)data[1] |
+                        ((uint32_t)data[2] << 8) |
+                        ((uint32_t)data[3] << 16) |
+                        ((uint32_t)data[4] << 24);
+            offset = (uint32_t)data[5] |
+                     ((uint32_t)data[6] << 8) |
+                     ((uint32_t)data[7] << 16) |
+                     ((uint32_t)data[8] << 24);
+
+            if (offset == 0) {
+                custom_presets_write_abort();
+                if (custom_presets_write_begin(total_len) != 0) {
+                    bt_att_cmd_error_rsp(device->acl_handle, BT_ATT_OP_WRITE_REQ,
+                                         BR_CFG_CMD_CHRC_HDL, BT_ATT_ERR_UNLIKELY);
+                    return;
+                }
+                custom_presets_write_total_len = total_len;
+                custom_presets_write_offset = 0;
+            }
+
+            if (total_len != custom_presets_write_total_len ||
+                offset != custom_presets_write_offset ||
+                custom_presets_write(offset, &data[9], len - 9) != 0) {
+                custom_presets_write_abort();
+                custom_presets_write_total_len = 0;
+                custom_presets_write_offset = 0;
+                bt_att_cmd_error_rsp(device->acl_handle, BT_ATT_OP_WRITE_REQ,
+                                     BR_CFG_CMD_CHRC_HDL, BT_ATT_ERR_INVALID_OFFSET);
+                return;
+            }
+
+            custom_presets_write_offset += len - 9;
+            break;
+        }
+        case CFG_CMD_COMMIT_CUSTOM_PRESETS:
+            if (custom_presets_commit() != 0) {
+                custom_presets_write_abort();
+                custom_presets_write_total_len = 0;
+                custom_presets_write_offset = 0;
+                bt_att_cmd_error_rsp(device->acl_handle, BT_ATT_OP_WRITE_REQ,
+                                     BR_CFG_CMD_CHRC_HDL, BT_ATT_ERR_UNLIKELY);
+                return;
+            }
+            custom_presets_write_total_len = 0;
+            custom_presets_write_offset = 0;
+            break;
         case CFG_CMD_SET_DEFAULT_CFG:
             /* Switch to the global layer only. Do not delete console/game
              * configuration files or clear persistent controller profiles. */
@@ -937,8 +1058,6 @@ void bt_att_cfg_hdlr(struct bt_dev *device, struct bt_hci_pkt *bt_hci_acl_pkt, u
         case BT_ATT_OP_READ_BLOB_REQ:
         {
             struct bt_att_read_blob_req *rd_blob_req = (struct bt_att_read_blob_req *)bt_hci_acl_pkt->att_data;
-            printf("# BT_ATT_OP_READ_BLOB_RSP\n");
-
             switch (rd_blob_req->handle) {
                 case BR_GLBL_CFG_CHRC_HDL:
                     bt_att_cmd_global_cfg_rd_rsp(device->acl_handle, rd_blob_req->offset);
@@ -951,6 +1070,17 @@ void bt_att_cfg_hdlr(struct bt_dev *device, struct bt_hci_pkt *bt_hci_acl_pkt, u
                     break;
                 case BR_MC_DATA_CHRC_HDL:
                     bt_att_cmd_mc_rd_rsp(device->acl_handle, 1);
+                    break;
+                case BR_CFG_CMD_CHRC_HDL:
+                    if (cfg_cmd == CFG_CMD_GET_CUSTOM_PRESETS_DATA) {
+                        bt_att_cfg_cmd_custom_presets_data_rsp(device->acl_handle,
+                                                               rd_blob_req->offset,
+                                                               BT_ATT_OP_READ_BLOB_RSP);
+                    }
+                    else {
+                        bt_att_cmd_error_rsp(device->acl_handle, BT_ATT_OP_READ_BLOB_REQ,
+                                             rd_blob_req->handle, BT_ATT_ERR_INVALID_HANDLE);
+                    }
                     break;
                 default:
                     bt_att_cmd_error_rsp(device->acl_handle, BT_ATT_OP_READ_BLOB_REQ, rd_blob_req->handle, BT_ATT_ERR_INVALID_HANDLE);

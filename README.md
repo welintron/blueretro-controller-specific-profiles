@@ -21,7 +21,6 @@ The firmware stores controller-specific mappings in ESP32 NVS.
 - A new controller is automatically registered when no matching profile exists.
 - Different controllers can share the same runtime slot without overwriting each other's stored mapping.
 - GameID configuration remains authoritative.
-- Added support for Victrix Pro BFG Reloaded Xbox and Flydigi Vader 5 Pro controllers.
 
 ### Profile lifecycle
 
@@ -55,6 +54,27 @@ Only the affected profile is rewritten when a mapping is committed.
 
 The legacy `profiles` blob remains readable for compatibility.
 
+### Custom preset persistence
+
+Custom presets are stored globally in the ESP32 SPIFFS filesystem, independently from the controller profile records stored in NVS.
+
+The database is maintained at:
+
+```text
+/fs/custom-presets.json
+```
+
+Temporary and backup files are used during transactional updates:
+
+```text
+/fs/custom-presets.tmp
+/fs/custom-presets.bak
+```
+
+The firmware validates the temporary database before promoting it to the active file, protecting the stored preset database from incomplete writes.
+
+Custom preset data is exposed to the WebConfig through the firmware GATT interface using commands for metadata retrieval, chunked data transfer and commit.
+
 ### Configuration reset
 
 Configuration reset clears both profile storage formats:
@@ -62,7 +82,7 @@ Configuration reset clears both profile storage formats:
 - `p0` through `p6`
 - legacy `profiles`
 
-This prevents old profiles from returning after a reset.
+Custom presets are preserved during the normal configuration reset.
 
 The normal firmware remains installed. The original full factory-reset/OTA behavior remains separate.
 
@@ -72,25 +92,37 @@ The WebConfig interface for this firmware fork is available at:
 [BlueRetro Controller-Specific Profiles WebConfig](https://welintron.github.io/webconfig/)
 
 
-Use the WebConfig together with the corresponding BlueRetro Controller-Specific Profiles firmware release.
+Use the WebConfig together with the latest BlueRetro Controller-Specific Profiles WebConfig release.
 
-The WebConfig provides the interface for selecting, reading, modifying and committing persistent controller-specific mappings.
+The WebConfig provides the interface for selecting, reading, modifying and committing persistent controller-specific mappings and for managing custom presets stored by the firmware.
 
 ## Release
 
-**Firmware version: v1.2.0**
+**Firmware version: v1.3.0**
 
-This release adds support for the **Flydigi Vader 5 Pro** and fixes duplicate controller profiles by using the controller MAC address + system ID as the profile identity.
+This release adds persistent custom preset storage in SPIFFS while retaining controller-specific profile persistence in NVS. It also includes the Flydigi Vader 5 Pro support and the controller profile identity fix introduced in the previous release.
 
-### Flydigi Vader 5 Pro
+### Custom presets
 
-The Flydigi Vader 5 Pro is supported through the Bluetooth/HID handling added for the controller.
+The firmware provides the storage and GATT transport used by WebConfig to manage custom presets.
 
-Controllers identified as **Xbox Wireless Controller** are assigned to the **Xbox One S / X|S** source.
+The custom preset database supports:
+
+- metadata retrieval with database version, length and checksum;
+- chunked database reads;
+- chunked database writes;
+- validation and transactional commit;
+- recovery using the active, temporary and backup database files.
+
+Custom presets are stored globally and are not duplicated per controller profile.
+
+### Flydigi Vader 5 Pro and Victrix Pro BFG Reloaded support
+
+The Flydigi Vader 5 Pro and Victrix Pro BFG Reloaded are supported through the Bluetooth/HID handling added for the controller.
 
 ### Profile identity fix
 
-Profile identity is now based on:
+Profile identity is based on:
 
 - Controller MAC address.
 - Wired console/system ID.
@@ -99,7 +131,7 @@ This allows the same physical controller to have different profiles for differen
 
 ### Tested targets
 
-The v1.2.0 firmware has been validated for:
+The v1.3.0 firmware includes the previously validated targets:
 
 - 3DO
 - Nintendo 64
@@ -117,6 +149,7 @@ The v1.2.0 firmware has been validated for:
 For installation, use the firmware binary corresponding to the hardware and system target of your BlueRetro adapter.
 
 For the complete source code and build instructions, see this repository.
+
 ### WebConfig GATT interface
 
 The firmware exposes profile operations used by the WebConfig:
@@ -126,6 +159,13 @@ The firmware exposes profile operations used by the WebConfig:
 - mapping read
 - mapping write
 - mapping commit
+
+It also exposes custom preset operations for:
+
+- custom preset metadata
+- custom preset data reads
+- custom preset data writes
+- custom preset database commit
 
 ### Tested hardware targets
 

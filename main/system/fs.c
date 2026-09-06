@@ -10,6 +10,7 @@
 #include <esp_err.h>
 #include "sdkconfig.h"
 #include "fs.h"
+#include "custom_presets.h"
 
 int32_t fs_init(void) {
     int32_t ret;
@@ -50,7 +51,10 @@ void fs_reset(void) {
         while ((dir = readdir(d)) != NULL) {
             char tmp_str[32] = "/fs/";
             strcat(tmp_str, dir->d_name);
-            if (strcmp(tmp_str, BDADDR_FILE) != 0 && strcmp(tmp_str, BITSTREAM_FILE) != 0) {
+            if (strcmp(tmp_str, BDADDR_FILE) != 0 && strcmp(tmp_str, BITSTREAM_FILE) != 0 &&
+                strcmp(tmp_str, CUSTOM_PRESETS_FILE) != 0 &&
+                strcmp(tmp_str, CUSTOM_PRESETS_TMP_FILE) != 0 &&
+                strcmp(tmp_str, CUSTOM_PRESETS_BACKUP_FILE) != 0) {
                 if(remove(tmp_str) == 0) {
                     printf("# RM %s\n", tmp_str);
                 }

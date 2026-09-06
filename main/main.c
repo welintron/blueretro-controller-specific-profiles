@@ -15,6 +15,7 @@
 #include "system/core0_stall.h"
 #include "system/delay.h"
 #include "system/fs.h"
+#include "system/custom_presets.h"
 #include "system/led.h"
 #include "adapter/adapter.h"
 #include "adapter/adapter_debug.h"
@@ -99,6 +100,10 @@ static void wl_init_task(void *arg) {
         err_led_set();
         err = 1;
         printf("FS init fail!\n");
+    } else if (custom_presets_init()) {
+        err_led_set();
+        err = 1;
+        printf("Custom Presets init fail!\n");
     }
 #endif
 

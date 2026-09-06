@@ -12,7 +12,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 docker version >/dev/null
-docker pull "$IMAGE"
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then docker pull "$IMAGE"; fi
 docker create     --entrypoint /bin/bash     --name "$CONTAINER"     "$IMAGE"     -lc "sleep infinity" >/dev/null
 
 docker start "$CONTAINER" >/dev/null
