@@ -111,6 +111,7 @@ idf_component_register(
         bt
         json
         spiffs
+        driver
         esp_driver_gpio
         esp_driver_ledc
         esp_driver_spi
